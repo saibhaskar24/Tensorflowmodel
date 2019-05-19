@@ -8,6 +8,7 @@ import android.graphics.Matrix;
 import android.graphics.PointF;
 import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
+import android.provider.MediaStore;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -33,6 +34,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -47,20 +49,14 @@ public class MainActivity extends AppCompatActivity {
     private Interpreter tflite;
     private List<String> labelList;
     private String chosen;
-
     private int[] intValues;
-    private boolean quant;
-    private float[][] labelProbArray = null;
-    // holds the probabilities of each label for quantized graphs
     private byte[][] labelProbArrayB = null;
 
     private ByteBuffer imgData = null;
-    private int DIM_IMG_SIZE_X = 299;
-    private int DIM_IMG_SIZE_Y = 299;
+    private int DIM_IMG_SIZE_X = 224;
+    private int DIM_IMG_SIZE_Y = 224;
     private int DIM_PIXEL_SIZE = 3;
     private static final int RESULTS_TO_SHOW = 3;
-    private static final int IMAGE_MEAN = 128;
-    private static final float IMAGE_STD = 128.0f;
 
     private PriorityQueue<Map.Entry<String, Float>> sortedLabels =
             new PriorityQueue<>(
@@ -86,46 +82,28 @@ public class MainActivity extends AppCompatActivity {
         label3 = (TextView) findViewById(R.id.label3);
         intValues = new int[DIM_IMG_SIZE_X * DIM_IMG_SIZE_Y];
         chosen = "mobilenet_quant_v1_224.tflite";
-        quant = false;
         topLables = new String[RESULTS_TO_SHOW];
         // initialize array to hold top probabilities
         topConfidence = new String[RESULTS_TO_SHOW];
-
-
-
+        try {
+            tflite = new Interpreter(loadModelFile(), tfliteOptions);
+            labelList = loadLabelList();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         // initialize byte array. The size depends if the input data needs to be quantized or not
-        if (quant) {
             imgData =
                     ByteBuffer.allocateDirect(
                             DIM_IMG_SIZE_X * DIM_IMG_SIZE_Y * DIM_PIXEL_SIZE);
-        } else {
-            imgData =
-                    ByteBuffer.allocateDirect(
-                            4 * DIM_IMG_SIZE_X * DIM_IMG_SIZE_Y * DIM_PIXEL_SIZE);
-        }
         imgData.order(ByteOrder.nativeOrder());
         try {
-            if (quant) {
                 labelProbArrayB = new byte[1][labelList.size()];
-            } else {
-                labelProbArray = new float[1][labelList.size()];
-            }
         }
         catch (Exception e) {
             Log.d("Error : ", e.getMessage());
         }
 
         // initialize probabilities array. The datatypes that array holds depends if the input data needs to be quantized or not
-
-
-
-        try {
-            tflite = new Interpreter(loadModelFile(), tfliteOptions);
-            labelList = loadLabelList();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-
 
         iview.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -151,13 +129,13 @@ public class MainActivity extends AppCompatActivity {
             assert data != null;
             Uri imageUri = data.getData();
             iview.setImageURI(imageUri);
-            ByteBuffer idata = ByteBuffer.allocateDirect(4 * 224 * 224 * 3);
-
         }
     }
 
     private MappedByteBuffer loadModelFile() throws IOException {
         AssetFileDescriptor fileDescriptor = this.getAssets().openFd(chosen);
+
+        Log.d("File descriptor : ", fileDescriptor + " ");
         FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
         FileChannel fileChannel = inputStream.getChannel();
         long startOffset = fileDescriptor.getStartOffset();
@@ -184,12 +162,9 @@ public class MainActivity extends AppCompatActivity {
         // convert bitmap to byte array
         convertBitmapToByteBuffer(bitmap);
         // pass byte data to the graph
+        Log.d("imagData: ", imgData + " ");
         try {
-            if (quant) {
                 tflite.run(imgData, labelProbArrayB);
-            } else {
-                tflite.run(imgData, labelProbArray);
-            }
         }
         catch (Exception e) {
             Log.d("IError" , e.getMessage());
@@ -223,16 +198,11 @@ public class MainActivity extends AppCompatActivity {
             for (int j = 0; j < DIM_IMG_SIZE_Y; ++j) {
                 final int val = intValues[pixel++];
                 // get rgb values from intValues where each int holds the rgb values for a pixel.
-                // if quantized, convert each rgb value to a byte, otherwise to a float
-                if (quant) {
+                // if quantized, convert each rgb value to a byte, otherwise to a floa
                     imgData.put((byte) ((val >> 16) & 0xFF));
                     imgData.put((byte) ((val >> 8) & 0xFF));
                     imgData.put((byte) (val & 0xFF));
-                } else {
-                    imgData.putFloat((((val >> 16) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
-                    imgData.putFloat((((val >> 8) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
-                    imgData.putFloat((((val) & 0xFF) - IMAGE_MEAN) / IMAGE_STD);
-                }
+
 
             }
         }
@@ -243,13 +213,8 @@ public class MainActivity extends AppCompatActivity {
         try {
 
             for (int i = 0; i < labelList.size(); ++i) {
-                if (quant) {
                     sortedLabels.add(
                             new AbstractMap.SimpleEntry<>(labelList.get(i), (labelProbArrayB[0][i] & 0xff) / 255.0f));
-                } else {
-                    sortedLabels.add(
-                            new AbstractMap.SimpleEntry<>(labelList.get(i), labelProbArray[0][i]));
-                }
                 if (sortedLabels.size() > RESULTS_TO_SHOW) {
                     sortedLabels.poll();
                 }
