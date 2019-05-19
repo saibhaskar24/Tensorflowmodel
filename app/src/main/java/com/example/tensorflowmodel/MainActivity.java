@@ -91,20 +91,9 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        // initialize byte array. The size depends if the input data needs to be quantized or not
-            imgData =
-                    ByteBuffer.allocateDirect(
-                            DIM_IMG_SIZE_X * DIM_IMG_SIZE_Y * DIM_PIXEL_SIZE);
+        imgData = ByteBuffer.allocateDirect(DIM_IMG_SIZE_X * DIM_IMG_SIZE_Y * DIM_PIXEL_SIZE);
         imgData.order(ByteOrder.nativeOrder());
-        try {
-                labelProbArrayB = new byte[1][labelList.size()];
-        }
-        catch (Exception e) {
-            Log.d("Error : ", e.getMessage());
-        }
-
-        // initialize probabilities array. The datatypes that array holds depends if the input data needs to be quantized or not
-
+        labelProbArrayB = new byte[1][labelList.size()];
         iview.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -112,7 +101,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-
 
 
     private void pick() {
@@ -157,20 +145,9 @@ public class MainActivity extends AppCompatActivity {
 
     public void detect(View view) {
         Bitmap bitmap_orig = ((BitmapDrawable) iview.getDrawable()).getBitmap();
-        // resize the bitmap to the required input size to the CNN
         Bitmap bitmap = getResizedBitmap(bitmap_orig, DIM_IMG_SIZE_X, DIM_IMG_SIZE_Y);
-        // convert bitmap to byte array
         convertBitmapToByteBuffer(bitmap);
-        // pass byte data to the graph
-        Log.d("imagData: ", imgData + " ");
-        try {
-                tflite.run(imgData, labelProbArrayB);
-        }
-        catch (Exception e) {
-            Log.d("IError" , e.getMessage());
-        }
-
-        // display the results
+        tflite.run(imgData, labelProbArrayB);
         printTopKLabels();
     }
 
@@ -192,25 +169,19 @@ public class MainActivity extends AppCompatActivity {
         }
         imgData.rewind();
         bitmap.getPixels(intValues, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
-        // loop through all pixels
         int pixel = 0;
         for (int i = 0; i < DIM_IMG_SIZE_X; ++i) {
             for (int j = 0; j < DIM_IMG_SIZE_Y; ++j) {
-                final int val = intValues[pixel++];
-                // get rgb values from intValues where each int holds the rgb values for a pixel.
-                // if quantized, convert each rgb value to a byte, otherwise to a floa
+                    final int val = intValues[pixel++];
                     imgData.put((byte) ((val >> 16) & 0xFF));
                     imgData.put((byte) ((val >> 8) & 0xFF));
                     imgData.put((byte) (val & 0xFF));
-
-
             }
         }
     }
 
     private void printTopKLabels() {
-        // add all results to priority queue
-        try {
+
 
             for (int i = 0; i < labelList.size(); ++i) {
                     sortedLabels.add(
@@ -219,23 +190,15 @@ public class MainActivity extends AppCompatActivity {
                     sortedLabels.poll();
                 }
             }
-            // get top results from priority queue
             final int size = sortedLabels.size();
             for (int i = 0; i < size; ++i) {
                 Map.Entry<String, Float> label = sortedLabels.poll();
                 topLables[i] = label.getKey();
                 topConfidence[i] = String.format("%.0f%%", label.getValue() * 100);
             }
-
-            // set the corresponding textviews with the results
             label1.setText("1. " + topLables[2] + "    " + topConfidence[2]);
             label2.setText("2. " + topLables[1] + "    " + topConfidence[1]);
             label3.setText("3. " + topLables[0] + "    " + topConfidence[0]);
-        }
-        catch (Exception e) {
-            Log.d("RUNERROR ", e.getMessage());
-        }
+
     }
-
-
 }
