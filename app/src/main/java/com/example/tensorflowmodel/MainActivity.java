@@ -9,6 +9,7 @@ import android.graphics.PointF;
 import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.provider.MediaStore;
+import android.speech.tts.TextToSpeech;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -37,10 +38,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.PriorityQueue;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements TextToSpeech.OnInitListener {
 
     Button detect;
     ImageView iview;
@@ -70,6 +72,8 @@ public class MainActivity extends AppCompatActivity {
     private String[] topLables;
     private String[] topConfidence;
 
+    TextToSpeech textToSpeech;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,6 +84,7 @@ public class MainActivity extends AppCompatActivity {
         label1 = (TextView) findViewById(R.id.label1);
         label2 = (TextView) findViewById(R.id.label2);
         label3 = (TextView) findViewById(R.id.label3);
+        textToSpeech = new TextToSpeech(this,  this);
         intValues = new int[DIM_IMG_SIZE_X * DIM_IMG_SIZE_Y];
         chosen = "mobilenet_quant_v1_224.tflite";
         topLables = new String[RESULTS_TO_SHOW];
@@ -199,6 +204,51 @@ public class MainActivity extends AppCompatActivity {
             label1.setText("1. " + topLables[2] + "    " + topConfidence[2]);
             label2.setText("2. " + topLables[1] + "    " + topConfidence[1]);
             label3.setText("3. " + topLables[0] + "    " + topConfidence[0]);
+
+            speakOut();
+
+    }
+
+
+    @Override
+    protected void onDestroy() {
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+            textToSpeech.shutdown();
+        }
+        super.onDestroy();
+        super.onDestroy();
+    }
+
+    private void speakOut() {
+        textToSpeech.speak("According to our prediction possible cases are", TextToSpeech.QUEUE_FLUSH, null);
+        textToSpeech.speak(label1.getText().toString(), TextToSpeech.QUEUE_FLUSH, null);
+        textToSpeech.speak(label2.getText().toString(), TextToSpeech.QUEUE_ADD, null);
+        textToSpeech.speak(label3.getText().toString(), TextToSpeech.QUEUE_ADD, null);
+    }
+
+    /**
+     * Called to signal the completion of the TextToSpeech engine initialization.
+     *
+     * @param status {@link TextToSpeech#SUCCESS} or {@link TextToSpeech#ERROR}.
+     */
+    @Override
+    public void onInit(int status) {
+        if (status == TextToSpeech.SUCCESS) {
+
+            int result = textToSpeech.setLanguage(Locale.ENGLISH);
+
+            if (result == TextToSpeech.LANG_MISSING_DATA
+                    || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.e("TTS", "This Language is not supported");
+            } else {
+                detect.setEnabled(true);
+                speakOut();
+            }
+
+        } else {
+            Log.e("TTS", "Initilization Failed!");
+        }
 
     }
 }
